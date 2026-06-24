@@ -68,6 +68,7 @@ func Base58Encode(num uint64) []byte {
 	for ; num > 0; num /= carry {
 		b = append(b, chars[num%carry])
 	}
+
 	reverse(b)
 
 	return b
@@ -88,7 +89,9 @@ func Base58Decode(b []byte) (uint64, error) {
 			return 0, ErrorInvalidCharacter
 		}
 
-		num += uint64(pow58[n-i-1] * pos)
+		// G115 is safe here: pos is in [0,57] (the -1 sentinel is rejected above)
+		// and n <= maxBytes, so pow58[n-i-1]*pos is non-negative and fits in uint64.
+		num += uint64(pow58[n-i-1] * pos) //nolint:gosec // bounded, see comment above
 	}
 
 	return num, nil

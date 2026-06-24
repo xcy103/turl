@@ -90,7 +90,7 @@ func (c *serverCLI) serverStart(ctx *cli.Context) error {
 	}
 
 	go func() {
-		if err = srv.ListenAndServe(); err != nil && !errors.Is(http.ErrServerClosed, err) {
+		if err = srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("listen and serve failed", slog.Any("error", err))
 		}
 	}()
@@ -130,7 +130,7 @@ func startObservabilityServer(c *configs.ObservabilityConfig, handler *turl.Hand
 	obsSrv.RegisterReadinessCheck("storage", handler.CheckReadiness)
 
 	go func() {
-		if err := obsSrv.Start(); err != nil && !errors.Is(http.ErrServerClosed, err) {
+		if err := obsSrv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("admin server failed", slog.Any("error", err))
 		}
 	}()

@@ -55,7 +55,7 @@ func NewBucketRateLimiter[T comparable](l *rate.Limiter) RateLimiter[T] {
 
 // Take gets an item and gets to decide whether it should run now or not,
 func (r *BucketRateLimiter[T]) Take(_ context.Context, _ T) bool {
-	return r.Limiter.Allow()
+	return r.Allow()
 }
 
 // When returns the delay for a reservation for a token from the bucket.

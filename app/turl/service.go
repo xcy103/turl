@@ -169,7 +169,7 @@ func (c *commandService) Create(ctx context.Context, long []byte) (*model.TinyUR
 	if err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			slog.Error(fmt.Sprintf("failed to insert into db: %v, try to get from db", err),
-				slog.Any("long url", long), slog.Int64("seq", int64(seq)))
+				slog.Any("long url", long), slog.Uint64("seq", seq))
 
 			record, err = c.db.GetByLongURL(ctx, long)
 			if err != nil {

@@ -14,6 +14,9 @@ import (
 	"github.com/beihai0xff/turl/pkg/mapping"
 )
 
+// errMsgInvalidShortURL is the error message returned for malformed short URLs.
+const errMsgInvalidShortURL = "invalid short URL"
+
 // Handler represents the request handler.
 type Handler struct {
 	domain string
@@ -88,7 +91,7 @@ func (h *Handler) Create(c *gin.Context) {
 func (h *Handler) Redirect(c *gin.Context) {
 	short := []byte(c.Param("short"))
 	if len(short) > 8 || len(short) < 6 {
-		c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: model.TinyURL{ShortURL: string(short)}, Error: "invalid short URL"})
+		c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: model.TinyURL{ShortURL: string(short)}, Error: errMsgInvalidShortURL})
 		return
 	}
 
@@ -96,7 +99,7 @@ func (h *Handler) Redirect(c *gin.Context) {
 	if err != nil {
 		t := model.TinyURL{ShortURL: string(short)}
 		if errors.Is(err, mapping.ErrInvalidInput) {
-			c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: t, Error: "invalid short URL"})
+			c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: t, Error: errMsgInvalidShortURL})
 			return
 		}
 
@@ -170,7 +173,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	err := h.s.Delete(c, []byte(req.ShortURL))
 	if err != nil {
 		if errors.Is(err, mapping.ErrInvalidInput) {
-			c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: t, Error: "invalid short URL"})
+			c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: t, Error: errMsgInvalidShortURL})
 			return
 		}
 

@@ -68,3 +68,6 @@ make gen/mock                  # regenerate mocks after changing an interface
 
 - Go toolchain and `golangci-lint` live in `/opt/homebrew/bin`; `go install` tools
   (`swag`, `mockery`, `gomodifytags`) live in `~/go/bin` (on PATH via `~/.zshrc`).
+- **golangci-lint is pinned to `v2.12.2`** (config is v2 format). CI pins the same
+  exact version via `golangci-lint-action@v7`; keep local and CI in lockstep. Do not
+  use a floating `latest` — it drifts across major versions and breaks the lint job.

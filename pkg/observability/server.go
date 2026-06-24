@@ -96,6 +96,7 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.RLock()
 	checks := make(map[string]HealthCheck, len(s.checks))
+
 	for name, check := range s.checks {
 		checks[name] = check
 	}
@@ -115,6 +116,7 @@ func (s *Server) handleReadiness(w http.ResponseWriter, r *http.Request) {
 
 	status := http.StatusOK
 	overall := "ok"
+
 	if !ready {
 		status = http.StatusServiceUnavailable
 		overall = "unavailable"

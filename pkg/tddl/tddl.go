@@ -113,7 +113,7 @@ func (s *tddlSequence) getRowID(seqName string, startNum uint64) error {
 	}
 
 	if res.RowsAffected == 1 {
-		s.rowID = seq.Model.ID
+		s.rowID = seq.ID
 		return nil
 	}
 
@@ -135,7 +135,7 @@ func (s *tddlSequence) createRecord(seqName string, startNum uint64) (uint, erro
 		return 0, res.Error
 	}
 
-	return seq.Model.ID, nil
+	return seq.ID, nil
 }
 
 // func (s *tddlSequence) Renew() {

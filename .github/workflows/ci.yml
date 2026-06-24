@@ -29,9 +29,11 @@ jobs:
       - name: Download Go Module
         run: make bootstrap
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          # Pin an exact version so CI and local runs are byte-for-byte identical.
+          # Floating `latest` previously drifted from v1 to v2 and broke the job.
+          version: v2.12.2
 
   test:
     name: Unittest
