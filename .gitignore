@@ -15,7 +15,13 @@ cover.html
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
+# IDE / editor config
 .idea
+.vscode/
+
+# macOS
+.DS_Store
+
 /build/dist/
 /docs/swagger
 /internal/tests/mocks/
