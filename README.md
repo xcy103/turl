@@ -3,121 +3,145 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/beihai0xff/turl)](https://goreportcard.com/report/github.com/beihai0xff/turl)
 
 # turl
-Tiny-URL 短链接服务
 
-在社交媒体、用户增长、广告投放等场景中，经常会遇到长链接转短链接的需求，提高用户点击率更高，同时能规避原始链接中一些关键词、域名屏蔽等。常见微博、微信等社交软件中，比如微博限制字数为140，如果包含的链接过长，会占用很多字数，所以需要将长链接转换为短链接，以节省字数。
+> 🌐 中文版: [README.zh-CN.md](README.zh-CN.md)
 
-短链接除了具有美观清爽的特性外，利用短链每次跳转都需要经过后端的特性，可以在跳转过程中做异步埋点，用于效果数据统计，常见的应用场景如下：
+A tiny-URL (short link) service written in Go.
 
-* 注册、收藏、加购、下单、支付效果统计；
-* 用户分享效果追踪；
-* 减少字符占用。
+Long-to-short URL conversion is a common need in social media, growth, and ad
+campaigns: short links raise click-through rates and help work around keyword or
+domain blocking. On platforms with strict length limits (e.g. a 140-character
+post), a long URL eats into the budget, so it is shortened to save space.
+
+Beyond being clean and compact, every visit to a short link is routed through the
+backend before redirecting. That indirection is a natural place to do asynchronous
+tracking for analytics. Typical use cases:
+
+* Conversion tracking for sign-up, favorite, add-to-cart, order, and payment flows;
+* Attribution for user shares;
+* Reducing character usage.
 
 # Features
 
-## 开发进度
-- [x] 分布式 ID 生成器：基于 TDDL 生成唯一的 ID；
-- [x] 分布式缓存：支持 Redis 缓存；
-- [x] 本地缓存：支持 bigcache 本地缓存；
-- [x] 数据库：支持 MySQL 数据库；
-- [x] URL 302 重定向；
-- [x] URL 编码：支持 Base58 编码；
-- [x] 限流器：支持 Redis 与单机令牌桶限流器；
-- [x] 读写分离：只读/只写/读写模式运行；
-- [x] 幂等：同一 URL 多次生成，需要保证生成的短链接是唯一的；
-- [ ] 过期时间：支持短链接过期时间；
-- [ ] 可观测：API 访问数据数据、服务监控；
+## Roadmap
 
-# 快速体验
+- [x] Distributed ID generator: unique IDs based on TDDL;
+- [x] Distributed cache: Redis;
+- [x] Local cache: bigcache;
+- [x] Storage: MySQL;
+- [x] URL 302 redirect;
+- [x] URL encoding: Base58;
+- [x] Rate limiting: Redis-based and standalone token-bucket limiters;
+- [x] Read/write split: run in read-only / write-only / read-write modes;
+- [x] Idempotency: repeated generation of the same URL yields the same short link;
+- [ ] Expiration: short links can be given a time-to-live;
+- [ ] Observability: API traffic metrics and service monitoring.
 
-## 本地运行
+# Quick Start
 
-确保本地已经安装了 Docker 与 Docker Compose，然后执行以下命令：
+## Run locally
+
+Make sure Docker and Docker Compose are installed, then run:
+
 ```shell
 make deploy
 ```
 
-终端输出 `turl service containers start successfully` 后，说明服务已经启动成功。
-该模式会部署 MySQL 与 Redis 服务，作为本地存储与缓存服务器。同时会启动两个服务节点，一个用于读写操作，另一个用于只读操作。
-- 读写服务：[http://localhost:8080](http://localhost:8080)，用于生成短链接、更新远程缓存、更新数据库等；
-- 只读服务：[http://localhost:80](http://localhost:80)，只用于访问短链接，不支持生成短链接，生产环境中可以部署多个只读服务节点，用于分流读取请求。
-- swagger：访问 [http://localhost:8080/v1/management/swagger/index.html#/](http://localhost:8080/v1/management/swagger/index.html#/) swagger 页面，
-## API 接口
+When the terminal prints `turl service containers start successfully`, the service
+is up. This mode deploys MySQL and Redis as local storage and cache, and starts two
+service nodes — one for read/write and one for read-only.
 
-### 生成短链接
+- Read/write service: [http://localhost:8080](http://localhost:8080) — generates short
+  links, updates the remote cache, writes to the database, etc.
+- Read-only service: [http://localhost:80](http://localhost:80) — only serves short-link
+  redirects; it does not generate short links. In production you can run multiple
+  read-only nodes to spread read traffic.
+- Swagger: [http://localhost:8080/v1/management/swagger/index.html#/](http://localhost:8080/v1/management/swagger/index.html#/)
+
+## API
+
+### Create a short link
 
 ```shell
 curl -X POST http://localhost:8080/v1/management/shorten -H 'Content-Type: application/json' -d '{"long_url": "https://google.com"}'
 ```
-返回结果：
+
+Response:
+
 ```json
 {"short_url":"http://localhost/24rgcX","long_url":"https://google.com","created_at":"2024-07-08T15:06:26.434Z","deleted_at":null,"error":""}
 ```
 
-### 访问短链接
+### Visit a short link
 
-访问短链接 `http://localhost/24rgcX`，将会被重定向到原始的长链接 `https://google.com`。
+Visiting the short link `http://localhost/24rgcX` redirects to the original long URL
+`https://google.com`.
 
 ```shell
 curl -L http://localhost/24rgcX
 ```
 
-### 获取长链接信息
+### Look up a long link
 
 ```shell
 curl -X GET http://localhost:8080/v1/management/shorten\?long_url\=https://google.com
 ```
 
-返回结果：
+Response:
+
 ```json
 {"short_url":"http://localhost/24rgcX","long_url":"https://google.com","created_at":"2024-07-08T15:06:26.434Z","deleted_at":null,"error":""}
 ```
 
+# System Design
 
-# 短链接服务系统设计
+## Functional requirements
 
-## 功能需求
-* 短链接生成：给定一个长链接，能够生成一个唯一的短链接，即使多次生成同一个长链接，也能保证生成的短链接是唯一的。
-* 短链接重定向：通过短链接能够访问到原始的长链接，通过 302 临时重定向的方式，将用户重定向到原始的长链接，临时重定向的方式可以保证搜索引擎不会抓取短链接，而是抓取原始的长链接，并且便于统计短链接的访问次数。
-* 访问限流：对短链接的访问可以设置限流，限制每个短链接单位时间内的的访问次数。
-* 过期时间：短链接可以设置过期时间，过期时间到了之后，短链接将失效，无法再访问到原始的长链接。
-* 短链接删除：短链接可以删除，删除之后，短链接将失效，无法再访问到原始的长链接。
+* **Short-link generation:** given a long URL, produce a unique short URL. Generating
+  the same long URL multiple times must always yield the same short URL.
+* **Redirection:** a short link redirects to the original long URL via a 302 temporary
+  redirect. A temporary redirect keeps search engines crawling the original URL (not the
+  short link) and makes it easy to count visits.
+* **Rate limiting:** access to short links can be rate-limited per unit time.
+* **Expiration:** a short link can carry a TTL; once expired it is no longer resolvable.
+* **Deletion:** a short link can be deleted, after which it is no longer resolvable.
 
-## 非功能需求
+## Non-functional requirements
 
-* 高可用：短链接服务需要保证高可用，即使某个节点宕机，也不影响整个服务的正常使用。
-* 高性能：短链接服务需要保证高性能，能够支撑每秒十万
-* 低延迟：短链接服务需要保证低延迟，用户访问短链接时，能够快速的重定向到原始的长链接。
-* 高可扩展性：短链接服务需要保证高可扩展性，能够支持大量的短链接生成和访问。
-* 高可靠性：短链接服务需要保证高可靠性，能够保证短链接的生成和访问的正确性。
+* **High availability:** the service stays up even if a node goes down.
+* **High performance:** capable of handling on the order of 100k requests per second.
+* **Low latency:** redirects resolve quickly.
+* **Scalability:** supports large volumes of short-link generation and access.
+* **Reliability:** generation and resolution are correct.
 
-## 资源预算
+## Capacity estimate
 
-* 假设我们的系统每天有 100M 用户在线，即 1亿日活；
-* 平均每个用户每天写 0.1 个帖子，为每个帖子生成一个对应的短链接，即每天总共生成 1kw 个短链接：
-  * 平均每个短链接-长链接映射关系占用 500Bytes 空间，即每天总共需要 5GB 的存储空间；
-  * 每日 10,000,000 次写入操作，1kw/86400s ≈ 116，即平均每秒需要处理 116qps 的写入操作；
-  * 假设峰值写入量约平均写入量的 10 倍，即 1160qps，为便于估算，可理解写峰值 qps 为 1k；
-* 平均每个用户每天访问 10 个帖子，即每天总共访问 10亿 次短链接，读写比例为 100:1：
-  * 平均每秒需要处理 11600 的读取操作，即约为 10k/s；
-  * 假设峰值读取量约平均读取量的 10 倍，即约为 100k/s；
-* 缓存资源预算：
-  * 由于短链服务具有明显的热点数据特征，因此需要使用缓存来提高访问性能，我们假设 10% 的数据贡献了 99% 的访问量
-  * 每日 10亿次的访问量中，我们假设 99% 的访问量是固定在 10% 的热点数据上，即需要缓存 1亿条数据，缓存服务器需要 50GB 内存空间；
-  * 再进一步，我们利用本地缓存来缓存最热的 1% 的数据，即需要缓存 1M 条数据，每台 Server 节点需要 500MB 内存空间用于本地缓存；
-  * 缓存命中率为 99%，即每日 10亿次的访问量中，有 1% 的访问量需要访问数据库，即 10M 次/日，即每秒需要处理 116 次数据库读取操作，即约为 100qps；
+* Assume 100M daily active users.
+* Each user writes ~0.1 posts/day, one short link per post → ~10M new short links/day:
+  * ~500 bytes per long↔short mapping → ~5GB of new storage per day;
+  * 10,000,000 writes/day → 10M / 86400s ≈ 116 → ~116 write QPS on average;
+  * assume peak write ≈ 10× average ≈ 1160 QPS, rounded to ~1k write QPS.
+* Each user reads ~10 posts/day → ~1B short-link visits/day, read:write ≈ 100:1:
+  * ~11,600 reads/second on average, i.e. ~10k/s;
+  * assume peak read ≈ 10× average ≈ ~100k/s.
+* Cache budget:
+  * Short-link traffic is heavily hot-skewed; assume 10% of data drives 99% of traffic.
+  * Of 1B daily visits, assume 99% hit a fixed 10% of data → cache ~100M entries → ~50GB.
+  * Further, use local cache for the hottest 1% → cache ~1M entries → ~500MB per node.
+  * At 99% cache hit ratio, ~1% of 1B visits reach the database → ~10M/day → ~116 DB
+    reads/second → ~100 QPS.
 
-综上所述：
-  * 数据库存储空间：每日消耗 5GB 磁盘，三年时间需要约 5TB；
-  * 数据库读写请求数：平均每秒 116qps 的写入操作与读取操作，峰值 1k/qps 的写入操作与读取操作；
-  * 缓存服务器内存空间：总共需要 50GB 内存空间，缓存约 1亿条数据；
-  * 本地缓存存储空间：每台 Server 节点需要 500MB 内存空间用于本地缓存，缓存约 1M 条数据；
+In summary:
+  * **DB storage:** ~5GB/day, ~5TB over three years.
+  * **DB throughput:** ~116 QPS average read+write, ~1k QPS peak.
+  * **Cache memory:** ~50GB total, caching ~100M entries.
+  * **Local cache:** ~500MB per node, caching ~1M entries.
 
-## 更多设计细节
+## More design docs
 
-* [短链接服务系统设计](docs/system-design.md)
-* [Base58 编码算法](docs/base58-design.md)
-* [分布式 ID 生成器](docs/tddl-design.md)
-* [限流器设计](docs/rate-limiter-design.md)
-* [API 性能测试](docs/api-benchmark.md)
-* [数据库表结构](docs/ddl)
+* [Short-link system design](docs/system-design.md)
+* [Base58 encoding](docs/base58-design.md)
+* [Distributed ID generator (TDDL)](docs/tddl-design.md)
+* [Rate limiter design](docs/rate-limiter-design.md)
+* [API benchmark](docs/api-benchmark.md)
+* [Database schema](docs/ddl)
