@@ -35,3 +35,7 @@ cache:
     ttl: 600s
     capacity: 1000000
     max_memory: 512
+observability:
+  enable: true
+  admin_listen: "0.0.0.0"
+  admin_port: 9090

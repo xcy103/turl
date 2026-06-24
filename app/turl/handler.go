@@ -1,6 +1,7 @@
 package turl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 type Handler struct {
 	domain string
 	s      Service
+	health HealthChecker
 }
 
 // NewHandler creates a new Handler.
@@ -28,8 +30,15 @@ func NewHandler(c *configs.ServerConfig) (*Handler, error) {
 
 	return &Handler{
 		s:      s,
+		health: s,
 		domain: c.Domain,
 	}, nil
+}
+
+// CheckReadiness reports whether the handler's backing dependencies are reachable.
+// It is consumed by the observability admin server's readiness probe.
+func (h *Handler) CheckReadiness(ctx context.Context) error {
+	return h.health.CheckHealth(ctx)
 }
 
 // Create creates a new short URL from the long URL. godoc

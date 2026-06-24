@@ -89,6 +89,19 @@ func (p *proxy) Del(ctx context.Context, k string) error {
 	return nil
 }
 
+// Ping reports the proxy healthy only when every backing cache is reachable.
+func (p *proxy) Ping(ctx context.Context) error {
+	if err := p.distributedCache.Ping(ctx); err != nil {
+		return fmt.Errorf("distributed cache unreachable: %w", err)
+	}
+
+	if err := p.localCache.Ping(ctx); err != nil {
+		return fmt.Errorf("local cache unreachable: %w", err)
+	}
+
+	return nil
+}
+
 func (p *proxy) Close() error {
 	if err := p.distributedCache.Close(); err != nil {
 		return err

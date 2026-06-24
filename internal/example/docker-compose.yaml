@@ -14,6 +14,7 @@ services:
       - ./config.yaml:/app/config.yaml
     ports:
       - "8080:8080"
+      - "9090:9090"
     depends_on:
       mysql:
         condition: service_healthy
@@ -34,6 +35,7 @@ services:
       - ./config.yaml:/app/config.yaml
     ports:
       - "80:8080"
+      - "9091:9090"
     depends_on:
       mysql:
         condition: service_healthy

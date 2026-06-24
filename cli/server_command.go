@@ -16,6 +16,7 @@ import (
 	"github.com/beihai0xff/turl/app/turl"
 	"github.com/beihai0xff/turl/configs"
 	"github.com/beihai0xff/turl/pkg/log"
+	"github.com/beihai0xff/turl/pkg/observability"
 	"github.com/beihai0xff/turl/pkg/shutdown"
 )
 
@@ -94,6 +95,8 @@ func (c *serverCLI) serverStart(ctx *cli.Context) error {
 		}
 	}()
 
+	obsSrv := startObservabilityServer(conf.Observability, handler)
+
 	exitSignal := make(chan os.Signal, 1)
 	signal.Notify(exitSignal, syscall.SIGINT, syscall.SIGTERM)
 	<-exitSignal
@@ -101,14 +104,40 @@ func (c *serverCLI) serverStart(ctx *cli.Context) error {
 	quitCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) //nolint:mnd
 	defer cancel()
 
-	shutdown.GracefulShutdown(quitCtx,
-		shutdown.HTTPServerShutdown(srv),
-		shutdown.HandlerShutdown(handler),
-	)
+	opts := []shutdown.OptionFunc{shutdown.HTTPServerShutdown(srv)}
+	if obsSrv != nil {
+		opts = append(opts, shutdown.HTTPServerShutdown(obsSrv.HTTPServer()))
+	}
+
+	opts = append(opts, shutdown.HandlerShutdown(handler))
+
+	shutdown.GracefulShutdown(quitCtx, opts...)
 
 	slog.Info("HTTP Server exited")
 
 	return nil
+}
+
+// startObservabilityServer starts the admin server when enabled, wiring the
+// handler's dependency check into the readiness probe. It returns nil when
+// observability is disabled or unconfigured.
+func startObservabilityServer(c *configs.ObservabilityConfig, handler *turl.Handler) *observability.Server {
+	if c == nil || !c.Enable {
+		return nil
+	}
+
+	obsSrv := observability.New(c)
+	obsSrv.RegisterReadinessCheck("storage", handler.CheckReadiness)
+
+	go func() {
+		if err := obsSrv.Start(); err != nil && !errors.Is(http.ErrServerClosed, err) {
+			slog.Error("admin server failed", slog.Any("error", err))
+		}
+	}()
+
+	slog.Info("admin server started", slog.String("addr", obsSrv.Addr()))
+
+	return obsSrv
 }
 
 func (c *serverCLI) parseServerStartConfig(ctx *cli.Context) (*configs.ServerConfig, error) {

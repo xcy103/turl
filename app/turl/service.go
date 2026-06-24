@@ -29,6 +29,15 @@ type Service interface {
 	Close() error
 }
 
+// HealthChecker reports whether the service's backing dependencies (database and
+// cache) are reachable. It is kept separate from Service so the business
+// interface stays focused on short-link operations.
+type HealthChecker interface {
+	CheckHealth(ctx context.Context) error
+}
+
+var _ HealthChecker = (*service)(nil)
+
 var _ Service = (*service)(nil)
 
 type service struct {
@@ -105,6 +114,21 @@ func newService(c *configs.ServerConfig) (*service, error) {
 			cache: cacheProxy,
 		},
 	}, nil
+}
+
+// CheckHealth pings the service's backing dependencies. The queryService is
+// present in every run mode (read-only and read-write), so it is the single
+// source of truth for readiness.
+func (s *service) CheckHealth(ctx context.Context) error {
+	if s.queryService != nil {
+		return s.queryService.checkHealth(ctx)
+	}
+
+	if s.commandService != nil {
+		return s.commandService.checkHealth(ctx)
+	}
+
+	return nil
 }
 
 // Close closes the command service.
@@ -186,6 +210,11 @@ func (c *commandService) Delete(ctx context.Context, short []byte) error {
 	return c.cache.Del(ctx, string(short))
 }
 
+// checkHealth pings the database and cache backing the command service.
+func (c *commandService) checkHealth(ctx context.Context) error {
+	return pingDeps(ctx, c.db, c.cache)
+}
+
 // Close closes the command service.
 func (c *commandService) Close() error {
 	c.seq.Close()
@@ -261,6 +290,11 @@ func (q *queryService) GetByLong(ctx context.Context, long []byte) (*model.TinyU
 	}, nil
 }
 
+// checkHealth pings the database and cache backing the query service.
+func (q *queryService) checkHealth(ctx context.Context) error {
+	return pingDeps(ctx, q.db, q.cache)
+}
+
 // Close closes the command service.
 func (q *queryService) Close() error {
 	if err := q.db.Close(); err != nil {
@@ -268,4 +302,18 @@ func (q *queryService) Close() error {
 	}
 
 	return q.cache.Close()
+}
+
+// pingDeps reports the first unreachable dependency, or nil when both the
+// database and cache respond.
+func pingDeps(ctx context.Context, db storage.Storage, c cache.Interface) error {
+	if err := db.Ping(ctx); err != nil {
+		return fmt.Errorf("database not ready: %w", err)
+	}
+
+	if err := c.Ping(ctx); err != nil {
+		return fmt.Errorf("cache not ready: %w", err)
+	}
+
+	return nil
 }

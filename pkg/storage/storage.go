@@ -20,6 +20,8 @@ type Storage interface {
 	GetByShortID(ctx context.Context, short uint64) (*TinyURL, error)
 	// Delete a short link by short id
 	Delete(ctx context.Context, short uint64) error
+	// Ping checks whether the underlying database is reachable.
+	Ping(ctx context.Context) error
 	// Close closes the storage.
 	Close() error
 }
@@ -107,6 +109,16 @@ func (s *storage) Delete(ctx context.Context, short uint64) error {
 	}
 
 	return nil
+}
+
+// Ping checks whether the underlying database is reachable.
+func (s *storage) Ping(ctx context.Context) error {
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+
+	return sqlDB.PingContext(ctx)
 }
 
 // Close closes the storage.

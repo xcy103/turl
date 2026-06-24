@@ -72,6 +72,12 @@ func (l *localCache) Del(_ context.Context, k string) error {
 	return nil
 }
 
+// Ping always succeeds: the local cache lives in process memory and has no
+// remote backend to reach.
+func (l *localCache) Ping(_ context.Context) error {
+	return nil
+}
+
 // Close the cache
 func (l *localCache) Close() error {
 	return l.cache.Close()

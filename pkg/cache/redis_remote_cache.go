@@ -53,6 +53,11 @@ func (c *redisCache) Del(ctx context.Context, k string) error {
 	return c.rdb.Del(ctx, k).Err()
 }
 
+// Ping checks whether the redis backend is reachable.
+func (c *redisCache) Ping(ctx context.Context) error {
+	return c.rdb.Ping(ctx).Err()
+}
+
 // Close the cache
 func (c *redisCache) Close() error {
 	return c.rdb.Close()

@@ -43,6 +43,9 @@ type ServerConfig struct {
 	MySQL *MySQLConfig `validate:"required" json:"mysql" yaml:"mysql" mapstructure:"mysql"`
 	// Cache is the cache config of turl server
 	Cache *CacheConfig `validate:"required" json:"cache" yaml:"cache" mapstructure:"cache"`
+	// Observability is the admin/observability config of turl server. It is
+	// optional; when absent the admin server is simply not started.
+	Observability *ObservabilityConfig `json:"observability" yaml:"observability" mapstructure:"observability"`
 }
 
 var (

@@ -19,6 +19,8 @@ type Interface interface {
 	Get(ctx context.Context, k string) ([]byte, error)
 	// Del delete the key from cache
 	Del(ctx context.Context, k string) error
+	// Ping checks whether the cache backend is reachable.
+	Ping(ctx context.Context) error
 	// Close the cache
 	Close() error
 }
