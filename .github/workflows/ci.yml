@@ -65,7 +65,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   build_docker_image:
-    name: Build And Push Docker Image
+    name: Build Docker Image
     needs: [ lint, test ]
     runs-on: ubuntu-latest
     steps:
@@ -79,15 +79,8 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+      # Build-only validation. The original "push to Docker Hub" steps were
+      # removed: they targeted the upstream author's registry and relied on
+      # secrets this fork does not have.
       - name: Build docker image
-        if: ${{ ! startsWith(github.ref, 'refs/tags/') }}
         run: make build BUILD_PLATFORMS=linux/amd64
-      - name: Login to Docker Hub
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Build and push
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        run: make build/docker_and_push

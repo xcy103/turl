@@ -1,7 +1,11 @@
 COMMIT_ID				:= $(shell git rev-parse --short HEAD)
-TAG_VERSION				:= $(shell git describe --abbrev=0 --tags)
+# Fall back to the short commit hash when no git tag is reachable (e.g. on a
+# fork that did not inherit the upstream tags), so the image tag is never empty.
+TAG_VERSION				:= $(shell git describe --abbrev=0 --tags 2>/dev/null || git rev-parse --short HEAD)
 BUILD_TIME				:= $(shell date)
 ARCH					:= $(shell uname -m)
+# Container image repository. Override to publish under your own namespace.
+IMAGE_REPO				?= beihai0xff/turl
 
 # fill the ldflags with the build info
 ldflags					=  "-w -X 'github.com/beihai0xff/turl/cli.version=$(TAG_VERSION)' -X 'github.com/beihai0xff/turl/cli.gitHash=$(COMMIT_ID)' -X 'github.com/beihai0xff/turl/cli.buildTime=$(BUILD_TIME)'"
@@ -62,7 +66,7 @@ build/docker:
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		--platform=$(BUILD_PLATFORMS) \
 		--output type=docker \
-		-t beihai0xff/turl:$(TAG_VERSION) -t beihai0xff/turl:latest .
+		-t $(IMAGE_REPO):$(TAG_VERSION) -t $(IMAGE_REPO):latest .
 
 build/docker_and_push:
 	DOCKER_BUILDKIT=1 docker buildx build \
@@ -74,7 +78,7 @@ build/docker_and_push:
 		--build-arg GO_VERSION=$(GO_VERSION) \
 		--platform=$(BUILD_PLATFORMS) \
 		--push \
-		-t beihai0xff/turl:$(TAG_VERSION) -t beihai0xff/turl:latest .
+		-t $(IMAGE_REPO):$(TAG_VERSION) -t $(IMAGE_REPO):latest .
 
 .PHONY: build build/binary build/docker build/docker_and_push
 
