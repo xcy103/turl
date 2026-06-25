@@ -13,7 +13,8 @@ import (
 	"github.com/beihai0xff/turl/pkg/workqueue"
 )
 
-// Logger returns a middleware that logs the request.
+// Logger returns a middleware that logs the request. It logs with the request
+// context so records are correlated with the active trace.
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -22,15 +23,12 @@ func Logger() gin.HandlerFunc {
 
 		end := time.Now()
 
-		var logFunc func(msg string, args ...any)
-
-		if c.Writer.Status() < http.StatusBadRequest {
-			logFunc = slog.Info
-		} else {
-			logFunc = slog.Error
+		level := slog.LevelInfo
+		if c.Writer.Status() >= http.StatusBadRequest {
+			level = slog.LevelError
 		}
 
-		logFunc("http request",
+		slog.LogAttrs(c.Request.Context(), level, "http request",
 			slog.String("ip", c.ClientIP()),
 			slog.String("method", c.Request.Method),
 			slog.String("path", c.Request.URL.Path),

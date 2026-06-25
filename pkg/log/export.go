@@ -45,9 +45,9 @@ func getLogHandler(w io.Writer, c *configs.LogConfig) (slog.Handler, error) {
 
 	switch c.Format {
 	case configs.EncoderTypeText:
-		return slog.NewTextHandler(w, opts), nil
+		return withTrace(slog.NewTextHandler(w, opts)), nil
 	case configs.EncoderTypeJSON:
-		return slog.NewJSONHandler(w, opts), nil
+		return withTrace(slog.NewJSONHandler(w, opts)), nil
 	default:
 		return nil, fmt.Errorf("unknown log format %s", c.Format)
 	}

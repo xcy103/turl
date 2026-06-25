@@ -35,7 +35,8 @@ tracking for analytics. Typical use cases:
 - [x] Read/write split: run in read-only / write-only / read-write modes;
 - [x] Idempotency: repeated generation of the same URL yields the same short link;
 - [ ] Expiration: short links can be given a time-to-live;
-- [ ] Observability: API traffic metrics and service monitoring.
+- [x] Observability: Prometheus metrics, Grafana dashboards, and OpenTelemetry
+  distributed tracing (exported to Jaeger).
 
 # Quick Start
 
@@ -74,6 +75,9 @@ API so internal endpoints are never exposed to end users:
 - Grafana: [http://localhost:3000](http://localhost:3000) — anonymous access, with a
   pre-provisioned "turl service overview" dashboard (request rate, p95 latency,
   cache hit ratio, short links created).
+- Jaeger: [http://localhost:16686](http://localhost:16686) — distributed traces;
+  each request links its HTTP span to the downstream cache and database spans, and
+  logs are correlated via an injected `trace_id`.
 
 ## API
 
