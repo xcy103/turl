@@ -64,7 +64,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	record, err := h.s.Create(c, []byte(req.LongURL))
+	record, err := h.s.Create(c.Request.Context(), []byte(req.LongURL))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, &model.ShortenResponse{TinyURL: model.TinyURL{LongURL: req.LongURL}, Error: err.Error()})
 		return
@@ -95,7 +95,7 @@ func (h *Handler) Redirect(c *gin.Context) {
 		return
 	}
 
-	long, err := h.s.Retrieve(c, short)
+	long, err := h.s.Retrieve(c.Request.Context(), short)
 	if err != nil {
 		t := model.TinyURL{ShortURL: string(short)}
 		if errors.Is(err, mapping.ErrInvalidInput) {
@@ -136,7 +136,7 @@ func (h *Handler) GetShortenInfo(c *gin.Context) {
 		return
 	}
 
-	record, err := h.s.GetByLong(c, []byte(req.LongURL))
+	record, err := h.s.GetByLong(c.Request.Context(), []byte(req.LongURL))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, &model.ShortenResponse{Error: err.Error()})
 		return
@@ -170,7 +170,7 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	t := model.TinyURL{ShortURL: req.ShortURL}
 
-	err := h.s.Delete(c, []byte(req.ShortURL))
+	err := h.s.Delete(c.Request.Context(), []byte(req.ShortURL))
 	if err != nil {
 		if errors.Is(err, mapping.ErrInvalidInput) {
 			c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: t, Error: errMsgInvalidShortURL})
