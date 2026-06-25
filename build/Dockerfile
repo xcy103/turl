@@ -32,7 +32,7 @@ ENV GIN_MODE=release
 EXPOSE 8080/tcp
 
 # let docker know how to test container health
-HEALTHCHECK CMD /app/turl server health || exit 1
+HEALTHCHECK CMD /app/turl health || exit 1
 
 COPY --from=builder /go/src/turl/build/dist/binary/turl  /app/turl
 
