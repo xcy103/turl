@@ -10,6 +10,7 @@ import (
 
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"golang.org/x/time/rate"
 
 	"github.com/beihai0xff/turl/api"
@@ -17,6 +18,7 @@ import (
 	"github.com/beihai0xff/turl/docs/swagger"
 	"github.com/beihai0xff/turl/pkg/db/redis"
 	"github.com/beihai0xff/turl/pkg/middleware"
+	"github.com/beihai0xff/turl/pkg/otel"
 	"github.com/beihai0xff/turl/pkg/workqueue"
 )
 
@@ -41,6 +43,9 @@ func NewServer(h *Handler, c *configs.ServerConfig) (*http.Server, error) {
 		gin.SetMode(gin.DebugMode)
 	}
 
+	// otelgin is outermost so every request gets a root span that the metrics
+	// and logger middlewares run inside.
+	router.Use(otelgin.Middleware(otel.ServiceName))
 	router.Use(middleware.Metrics(), middleware.Logger(), middleware.HealthCheck(HealthCheckPath))
 
 	router.Use(gin.Recovery()) // recover from any panics, should be the last middleware

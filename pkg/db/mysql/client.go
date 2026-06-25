@@ -7,6 +7,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	"gorm.io/plugin/opentelemetry/tracing"
 
 	"github.com/beihai0xff/turl/configs"
 )
@@ -29,6 +30,11 @@ func New(c *configs.MySQLConfig) (*gorm.DB, error) {
 		TranslateError:         true,
 	})
 	if err != nil {
+		return nil, err
+	}
+
+	// Trace SQL queries via OpenTelemetry; metrics are handled separately.
+	if err = db.Use(tracing.NewPlugin(tracing.WithoutMetrics())); err != nil {
 		return nil, err
 	}
 

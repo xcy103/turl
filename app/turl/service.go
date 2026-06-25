@@ -16,6 +16,7 @@ import (
 	"github.com/beihai0xff/turl/pkg/db/mysql"
 	"github.com/beihai0xff/turl/pkg/mapping"
 	"github.com/beihai0xff/turl/pkg/metrics"
+	"github.com/beihai0xff/turl/pkg/otel"
 	"github.com/beihai0xff/turl/pkg/storage"
 	"github.com/beihai0xff/turl/pkg/tddl"
 	"github.com/beihai0xff/turl/pkg/validate"
@@ -157,6 +158,9 @@ type commandService struct {
 
 // Create creates a new tiny URL.
 func (c *commandService) Create(ctx context.Context, long []byte) (*model.TinyURL, error) {
+	ctx, span := otel.Tracer().Start(ctx, "service.Create")
+	defer span.End()
+
 	if err := validate.Instance().VarCtx(ctx, string(long), "required,http_url"); err != nil {
 		return nil, err
 	}
@@ -239,6 +243,9 @@ type queryService struct {
 
 // Retrieve a tiny URL.
 func (q *queryService) Retrieve(ctx context.Context, short []byte) ([]byte, error) {
+	ctx, span := otel.Tracer().Start(ctx, "service.Retrieve")
+	defer span.End()
+
 	// decode and validate short URI
 	seq, err := mapping.Base58Decode(short)
 	if err != nil {
