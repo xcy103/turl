@@ -22,9 +22,19 @@ import (
 	"github.com/beihai0xff/turl/pkg/validate"
 )
 
+// ErrExpired is returned when a short link exists but its TTL has elapsed.
+var ErrExpired = errors.New("short URL expired")
+
+// Janitor defaults for reaping expired links.
+const (
+	janitorInterval  = time.Minute
+	janitorBatchSize = 100
+)
+
 // Service represents the tiny URL service interface.
 type Service interface {
-	Create(ctx context.Context, long []byte) (*model.TinyURL, error)
+	// Create shortens long, optionally expiring it after ttl (0 means never).
+	Create(ctx context.Context, long []byte, ttl time.Duration) (*model.TinyURL, error)
 	GetByLong(ctx context.Context, long []byte) (*model.TinyURL, error)
 	Retrieve(ctx context.Context, short []byte) ([]byte, error)
 	Delete(ctx context.Context, short []byte) error
@@ -89,7 +99,7 @@ func newService(c *configs.ServerConfig) (*service, error) {
 		}, nil
 	}
 
-	if db.AutoMigrate(tddl.Sequence{}, storage.TinyURL{}) != nil {
+	if err = db.AutoMigrate(tddl.Sequence{}, storage.TinyURL{}); err != nil {
 		return nil, err
 	}
 
@@ -103,13 +113,17 @@ func newService(c *configs.ServerConfig) (*service, error) {
 		return nil, err
 	}
 
+	cmd := &commandService{
+		ttl:         c.Cache.Redis.TTL,
+		db:          storage.New(db),
+		cache:       writeCacheProxy,
+		seq:         t,
+		janitorStop: make(chan struct{}),
+	}
+	go cmd.runJanitor()
+
 	return &service{
-		commandService: &commandService{
-			ttl:   c.Cache.Redis.TTL,
-			db:    storage.New(db),
-			cache: writeCacheProxy,
-			seq:   t,
-		},
+		commandService: cmd,
 		queryService: &queryService{
 			ttl:   c.Cache.Redis.TTL,
 			db:    storage.New(db),
@@ -154,10 +168,12 @@ type commandService struct {
 	db    storage.Storage
 	cache cache.Interface
 	seq   tddl.TDDL
+
+	janitorStop chan struct{}
 }
 
 // Create creates a new tiny URL.
-func (c *commandService) Create(ctx context.Context, long []byte) (*model.TinyURL, error) {
+func (c *commandService) Create(ctx context.Context, long []byte, ttl time.Duration) (*model.TinyURL, error) {
 	ctx, span := otel.Tracer().Start(ctx, "service.Create")
 	defer span.End()
 
@@ -170,7 +186,14 @@ func (c *commandService) Create(ctx context.Context, long []byte) (*model.TinyUR
 		return nil, fmt.Errorf("failed to generate sequence: %w", err)
 	}
 
-	record, err := c.db.Insert(ctx, seq, long)
+	var expiresAt *time.Time
+
+	if ttl > 0 {
+		t := time.Now().Add(ttl)
+		expiresAt = &t
+	}
+
+	record, err := c.db.Insert(ctx, seq, long, expiresAt)
 	if err != nil {
 		if errors.Is(err, gorm.ErrDuplicatedKey) {
 			slog.Error(fmt.Sprintf("failed to insert into db: %v, try to get from db", err),
@@ -191,8 +214,9 @@ func (c *commandService) Create(ctx context.Context, long []byte) (*model.TinyUR
 	}
 
 	short := mapping.Base58Encode(seq)
-	// set local cache and distributed cache, if failed, just log the error, not return err
-	if err = c.cache.Set(ctx, string(short), long, c.ttl); err != nil {
+	// set local cache and distributed cache, if failed, just log the error, not return err.
+	// record.ExpiresAt covers both the new and the idempotent-duplicate paths.
+	if err = c.cache.Set(ctx, string(short), long, cacheTTL(c.ttl, record.ExpiresAt)); err != nil {
 		slog.ErrorContext(ctx, "failed to set cache", slog.Any("error", err))
 	}
 
@@ -201,7 +225,32 @@ func (c *commandService) Create(ctx context.Context, long []byte) (*model.TinyUR
 		LongURL:   string(long),
 		CreatedAt: record.CreatedAt,
 		DeletedAt: record.DeletedAt,
+		ExpiresAt: record.ExpiresAt,
 	}, nil
+}
+
+// runJanitor periodically reaps expired links in the background until stopped.
+func (c *commandService) runJanitor() {
+	ticker := time.NewTicker(janitorInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-c.janitorStop:
+			return
+		case <-ticker.C:
+			n, err := c.db.DeleteExpired(context.Background(), time.Now(), janitorBatchSize)
+			if err != nil {
+				slog.Error("janitor failed to reap expired links", slog.Any("error", err))
+				continue
+			}
+
+			if n > 0 {
+				metrics.AddExpiredReaped(n)
+				slog.Info("janitor reaped expired links", slog.Int64("count", n))
+			}
+		}
+	}
 }
 
 func (c *commandService) Delete(ctx context.Context, short []byte) error {
@@ -225,6 +274,10 @@ func (c *commandService) checkHealth(ctx context.Context) error {
 
 // Close closes the command service.
 func (c *commandService) Close() error {
+	if c.janitorStop != nil {
+		close(c.janitorStop)
+	}
+
 	c.seq.Close()
 
 	if err := c.db.Close(); err != nil {
@@ -262,22 +315,22 @@ func (q *queryService) Retrieve(ctx context.Context, short []byte) ([]byte, erro
 		return nil, err
 	}
 
-	defer func() {
-		if len(long) > 0 {
-			// set local cache and distributed cache, if failed, just log the error, not return err
-			if cerr := q.cache.Set(ctx, string(short), long, q.ttl); cerr != nil {
-				slog.ErrorContext(ctx, "failed to set cache", slog.Any("error", err))
-			}
-		}
-	}()
-
 	// try to get from db
 	res, err := q.db.GetByShortID(ctx, seq)
 	if err != nil {
 		return nil, err
 	}
 
+	if isExpired(res.ExpiresAt) {
+		return nil, ErrExpired
+	}
+
 	long = res.LongURL
+	// Cache with a TTL bounded by the link's remaining lifetime so an expired
+	// link can never be served from a still-warm cache entry.
+	if cerr := q.cache.Set(ctx, string(short), long, cacheTTL(q.ttl, res.ExpiresAt)); cerr != nil {
+		slog.ErrorContext(ctx, "failed to set cache", slog.Any("error", cerr))
+	}
 
 	return long, nil
 }
@@ -313,6 +366,26 @@ func (q *queryService) Close() error {
 	}
 
 	return q.cache.Close()
+}
+
+// cacheTTL bounds the cache TTL by the link's remaining lifetime, so an expired
+// link is never served from a still-warm cache entry. A nil expiresAt means the
+// link never expires and the configured TTL is used as-is.
+func cacheTTL(configTTL time.Duration, expiresAt *time.Time) time.Duration {
+	if expiresAt == nil {
+		return configTTL
+	}
+
+	if remaining := time.Until(*expiresAt); remaining < configTTL {
+		return remaining
+	}
+
+	return configTTL
+}
+
+// isExpired reports whether expiresAt is set and already in the past.
+func isExpired(expiresAt *time.Time) bool {
+	return expiresAt != nil && !expiresAt.After(time.Now())
 }
 
 // pingDeps reports the first unreachable dependency, or nil when both the

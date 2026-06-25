@@ -34,7 +34,8 @@ tracking for analytics. Typical use cases:
 - [x] Rate limiting: Redis-based and standalone token-bucket limiters;
 - [x] Read/write split: run in read-only / write-only / read-write modes;
 - [x] Idempotency: repeated generation of the same URL yields the same short link;
-- [ ] Expiration: short links can be given a time-to-live;
+- [x] Expiration: short links accept an optional TTL; expired links return 410 Gone
+  and are reaped by a background janitor;
 - [x] Observability: Prometheus metrics, Grafana dashboards, and OpenTelemetry
   distributed tracing (exported to Jaeger).
 
@@ -90,7 +91,14 @@ curl -X POST http://localhost:8080/v1/management/shorten -H 'Content-Type: appli
 Response:
 
 ```json
-{"short_url":"http://localhost/24rgcX","long_url":"https://google.com","created_at":"2024-07-08T15:06:26.434Z","deleted_at":null,"error":""}
+{"short_url":"http://localhost/24rgcX","long_url":"https://google.com","created_at":"2024-07-08T15:06:26.434Z","deleted_at":null,"expires_at":null,"error":""}
+```
+
+Pass an optional `ttl_seconds` to make the link expire. After it expires, visiting
+it returns `410 Gone`, and a background janitor removes the row.
+
+```shell
+curl -X POST http://localhost:8080/v1/management/shorten -H 'Content-Type: application/json' -d '{"long_url": "https://google.com", "ttl_seconds": 3600}'
 ```
 
 ### Visit a short link

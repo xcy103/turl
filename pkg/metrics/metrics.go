@@ -64,6 +64,14 @@ var (
 			Help:      "Total number of short links successfully created.",
 		},
 	)
+
+	expiredReapedTotal = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "expired_links_reaped_total",
+			Help:      "Total number of expired short links removed by the background janitor.",
+		},
+	)
 )
 
 func init() {
@@ -74,6 +82,7 @@ func init() {
 		httpRequestDuration,
 		cacheRequestsTotal,
 		shortenCreatedTotal,
+		expiredReapedTotal,
 	)
 }
 
@@ -104,4 +113,9 @@ func RecordCacheResult(layer string, hit bool) {
 // IncShortenCreated increments the count of successfully created short links.
 func IncShortenCreated() {
 	shortenCreatedTotal.Inc()
+}
+
+// AddExpiredReaped records that n expired short links were removed by the janitor.
+func AddExpiredReaped(n int64) {
+	expiredReapedTotal.Add(float64(n))
 }

@@ -30,7 +30,7 @@ func TestHandler_Create(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 		resp := httptest.NewRecorder()
 
-		mockService.EXPECT().Create(mock.Anything, mock.Anything).Return(&model.TinyURL{
+		mockService.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).Return(&model.TinyURL{
 			ShortURL:  "abcefg",
 			LongURL:   "https://www.example.com",
 			CreatedAt: time.Now(),
@@ -54,7 +54,7 @@ func TestHandler_Create(t *testing.T) {
 
 	t.Run("CreateURLFailed", func(t *testing.T) {
 		testErr := errors.New("test error")
-		mockService.EXPECT().Create(mock.Anything, mock.Anything).Return(nil, testErr).Times(1)
+		mockService.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).Return(nil, testErr).Times(1)
 
 		req := httptest.NewRequest(http.MethodPost, "/create", bytes.NewBuffer([]byte(`{"long_url":"https://www.example.com"}`)))
 		req.Header.Set("Content-Type", "application/json")

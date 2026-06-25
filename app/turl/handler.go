@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -64,7 +65,9 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	record, err := h.s.Create(c.Request.Context(), []byte(req.LongURL))
+	ttl := time.Duration(req.TTLSeconds) * time.Second
+
+	record, err := h.s.Create(c.Request.Context(), []byte(req.LongURL), ttl)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, &model.ShortenResponse{TinyURL: model.TinyURL{LongURL: req.LongURL}, Error: err.Error()})
 		return
@@ -86,6 +89,7 @@ func (h *Handler) Create(c *gin.Context) {
 //	@Success		302		{string}	string
 //	@Failure		400		{object}	model.ShortenResponse
 //	@Failure		404		{object}	model.ShortenResponse
+//	@Failure		410		{object}	model.ShortenResponse
 //	@Failure		500		{object}	model.ShortenResponse
 //	@Router			/:short [get]
 func (h *Handler) Redirect(c *gin.Context) {
@@ -100,6 +104,11 @@ func (h *Handler) Redirect(c *gin.Context) {
 		t := model.TinyURL{ShortURL: string(short)}
 		if errors.Is(err, mapping.ErrInvalidInput) {
 			c.JSON(http.StatusBadRequest, &model.ShortenResponse{TinyURL: t, Error: errMsgInvalidShortURL})
+			return
+		}
+
+		if errors.Is(err, ErrExpired) {
+			c.JSON(http.StatusGone, &model.ShortenResponse{TinyURL: t, Error: "short URL expired"})
 			return
 		}
 

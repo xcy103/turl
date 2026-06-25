@@ -11,6 +11,9 @@ import (
 type CreateRequest struct {
 	// LongURL is the original long URL
 	LongURL string `binding:"required,http_url" json:"long_url" form:"long_url" xml:"long_url"`
+	// TTLSeconds is an optional time-to-live in seconds; 0 (or omitted) means the
+	// short link never expires.
+	TTLSeconds int `binding:"omitempty,gt=0" json:"ttl_seconds" form:"ttl_seconds" xml:"ttl_seconds"`
 }
 
 // ShortenRequest is the request of shorten API with short URL
@@ -36,4 +39,6 @@ type TinyURL struct {
 	CreatedAt time.Time `json:"created_at"`
 	// DeletedAt is the deletion time of the short URL
 	DeletedAt gorm.DeletedAt `json:"deleted_at"`
+	// ExpiresAt is when the short URL expires; null means it never expires
+	ExpiresAt *time.Time `json:"expires_at"`
 }

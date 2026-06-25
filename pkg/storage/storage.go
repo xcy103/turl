@@ -3,6 +3,7 @@ package storage
 
 import (
 	"context"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -12,14 +13,18 @@ var _ Storage = (*storage)(nil)
 
 // Storage is an interface that defines the methods that a storage system must implement.
 type Storage interface {
-	// Insert adds a new TinyURL record to the storage.
-	Insert(ctx context.Context, short uint64, longURL []byte) (*TinyURL, error)
+	// Insert adds a new TinyURL record to the storage. A nil expiresAt means the
+	// link never expires.
+	Insert(ctx context.Context, short uint64, longURL []byte, expiresAt *time.Time) (*TinyURL, error)
 	// GetByLongURL retrieves a TinyURL record by its original URL.
 	GetByLongURL(ctx context.Context, long []byte) (*TinyURL, error)
 	// GetByShortID retrieves a TinyURL record by its short ID.
 	GetByShortID(ctx context.Context, short uint64) (*TinyURL, error)
 	// Delete a short link by short id
 	Delete(ctx context.Context, short uint64) error
+	// DeleteExpired permanently removes up to limit records whose expiry is
+	// before now, returning how many were removed.
+	DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error)
 	// Ping checks whether the underlying database is reachable.
 	Ping(ctx context.Context) error
 	// Close closes the storage.
@@ -31,6 +36,8 @@ type TinyURL struct {
 	gorm.Model
 	LongURL []byte `gorm:"type:VARCHAR(500);uniqueIndex;not null" json:"long_url"` // The original URL.
 	Short   uint64 `gorm:"type:BIGINT;uniqueIndex;not null" json:"short"`          // The shortened URL ID.
+	// ExpiresAt is when the link expires; nil means it never expires.
+	ExpiresAt *time.Time `gorm:"index" json:"expires_at"`
 }
 
 // TableName returns the table name of the TinyURL model.
@@ -56,10 +63,11 @@ func newStorage(db *gorm.DB) *storage {
 }
 
 // Insert adds a new TinyURL record to the storage.
-func (s *storage) Insert(ctx context.Context, short uint64, long []byte) (*TinyURL, error) {
+func (s *storage) Insert(ctx context.Context, short uint64, long []byte, expiresAt *time.Time) (*TinyURL, error) {
 	t := TinyURL{
-		Short:   short,
-		LongURL: long,
+		Short:     short,
+		LongURL:   long,
+		ExpiresAt: expiresAt,
 	}
 
 	// Create a new record in the database.
@@ -109,6 +117,18 @@ func (s *storage) Delete(ctx context.Context, short uint64) error {
 	}
 
 	return nil
+}
+
+// DeleteExpired permanently removes up to limit expired records. It uses
+// Unscoped to hard-delete, reclaiming storage rather than soft-deleting.
+func (s *storage) DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error) {
+	res := s.db.WithContext(ctx).
+		Unscoped().
+		Where("expires_at IS NOT NULL AND expires_at < ?", now).
+		Limit(limit).
+		Delete(&TinyURL{})
+
+	return res.RowsAffected, res.Error
 }
 
 // Ping checks whether the underlying database is reachable.

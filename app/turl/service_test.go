@@ -47,23 +47,23 @@ func TestService_Create(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("CreateNewURL", func(t *testing.T) {
-		short, err := turl.Create(context.Background(), []byte("https://www.example.com"))
+		short, err := turl.Create(context.Background(), []byte("https://www.example.com"), 0)
 		require.NoError(t, err)
 		require.NotNil(t, short)
 	})
 
 	t.Run("CreateInvalidURL", func(t *testing.T) {
-		short, err := turl.Create(context.Background(), []byte("invalid_url"))
+		short, err := turl.Create(context.Background(), []byte("invalid_url"), 0)
 		require.Error(t, err)
 		require.Nil(t, short)
 	})
 
 	t.Run("CreateExistingURL", func(t *testing.T) {
-		short, err := turl.Create(context.Background(), []byte("https://www.CreateExistingURL.com"))
+		short, err := turl.Create(context.Background(), []byte("https://www.CreateExistingURL.com"), 0)
 		require.NoError(t, err)
 		require.NotNil(t, short)
 
-		short2, err := turl.Create(context.Background(), []byte("https://www.CreateExistingURL.com"))
+		short2, err := turl.Create(context.Background(), []byte("https://www.CreateExistingURL.com"), 0)
 		require.NoError(t, err)
 		require.NotNil(t, short2)
 		require.Equal(t, short, short2)
@@ -78,7 +78,7 @@ func TestService_Retrieve(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("RetrieveExistingURL", func(t *testing.T) {
-		record, err := turl.Create(context.Background(), []byte("https://www.example.com"))
+		record, err := turl.Create(context.Background(), []byte("https://www.example.com"), 0)
 		require.NoError(t, err)
 		got, err := turl.Retrieve(context.Background(), []byte(record.ShortURL))
 		require.NoError(t, err)
@@ -116,20 +116,20 @@ func TestService_Create_failed(t *testing.T) {
 
 	t.Run("CreateFailedToGenerateSequence", func(t *testing.T) {
 		mockTDDL.EXPECT().Next(mock.Anything).Return(uint64(0), testErr).Times(1)
-		_, err := turl.Create(context.Background(), []byte("https://www.example.com"))
+		_, err := turl.Create(context.Background(), []byte("https://www.example.com"), 0)
 		require.ErrorIs(t, err, testErr)
 	})
 
 	t.Run("CreateFailedToInsertIntoDB", func(t *testing.T) {
 		mockTDDL.EXPECT().Next(mock.Anything).Return(uint64(1), nil).Times(1)
-		mockStorage.EXPECT().Insert(mock.Anything, uint64(1), []byte("https://www.example.com")).Return(nil, testErr).Times(1)
-		_, err := turl.Create(context.Background(), []byte("https://www.example.com"))
+		mockStorage.EXPECT().Insert(mock.Anything, uint64(1), []byte("https://www.example.com"), mock.Anything).Return(nil, testErr).Times(1)
+		_, err := turl.Create(context.Background(), []byte("https://www.example.com"), 0)
 		require.ErrorIs(t, err, testErr)
 	})
 
 	t.Run("CreateFailedToSetCache", func(t *testing.T) {
 		mockTDDL.EXPECT().Next(mock.Anything).Return(uint64(1), nil).Times(1)
-		mockStorage.EXPECT().Insert(mock.Anything, uint64(1), []byte("https://www.example.com")).Return(&storage.TinyURL{
+		mockStorage.EXPECT().Insert(mock.Anything, uint64(1), []byte("https://www.example.com"), mock.Anything).Return(&storage.TinyURL{
 			Short:   1e7,
 			LongURL: []byte("https://www.example.com"),
 			Model: gorm.Model{
@@ -138,7 +138,7 @@ func TestService_Create_failed(t *testing.T) {
 			},
 		}, nil)
 		mockCache.EXPECT().Set(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(testErr).Times(1)
-		_, err := turl.Create(context.Background(), []byte("https://www.example.com"))
+		_, err := turl.Create(context.Background(), []byte("https://www.example.com"), 0)
 		require.NoError(t, err)
 	})
 }
@@ -193,7 +193,7 @@ func Test_queryService_GetByLong(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("GetByLongSuccess", func(t *testing.T) {
-		record, err := s.Create(context.Background(), []byte("https://www.queryService_GetByLong.com"))
+		record, err := s.Create(context.Background(), []byte("https://www.queryService_GetByLong.com"), 0)
 		require.NoError(t, err)
 
 		got, err := s.GetByLong(context.Background(), []byte("https://www.queryService_GetByLong.com"))
