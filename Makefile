@@ -16,7 +16,7 @@ GOMODIFYTAGS_VERSION	:= v1.17.0
 # fill the ldflags with the build info
 ldflags					=  "-w -X 'github.com/beihai0xff/turl/cli.version=$(TAG_VERSION)' -X 'github.com/beihai0xff/turl/cli.gitHash=$(COMMIT_ID)' -X 'github.com/beihai0xff/turl/cli.buildTime=$(BUILD_TIME)'"
 BUILD_PLATFORMS 		=  linux/amd64,linux/arm64
-GO_VERSION 				=  1.23-bookworm
+GO_VERSION 				=  1.25-bookworm
 
 # different Linux(MacOS) distro use different arch name, so we unify them using the same name aarch64
 # eg. on MacOS with Apple silicon arch name is arm64, we use aarch64 as the arch name
