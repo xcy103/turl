@@ -39,3 +39,7 @@ observability:
   enable: true
   admin_listen: "0.0.0.0"
   admin_port: 9090
+  tracing:
+    enable: true
+    otlp_endpoint: "jaeger:4317"
+    sampling_ratio: 1.0

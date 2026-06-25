@@ -18,6 +18,7 @@ import (
 	"github.com/beihai0xff/turl/pkg/log"
 	"github.com/beihai0xff/turl/pkg/metrics"
 	"github.com/beihai0xff/turl/pkg/observability"
+	"github.com/beihai0xff/turl/pkg/otel"
 	"github.com/beihai0xff/turl/pkg/shutdown"
 )
 
@@ -80,6 +81,11 @@ func (c *serverCLI) serverStart(ctx *cli.Context) error {
 		return err
 	}
 
+	shutdownTracing, err := initTracing(conf)
+	if err != nil {
+		return err
+	}
+
 	handler, err := turl.NewHandler(conf)
 	if err != nil {
 		return err
@@ -105,18 +111,37 @@ func (c *serverCLI) serverStart(ctx *cli.Context) error {
 	quitCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) //nolint:mnd
 	defer cancel()
 
+	shutdown.GracefulShutdown(quitCtx, shutdownOptions(srv, obsSrv, handler, shutdownTracing)...)
+
+	slog.Info("HTTP Server exited")
+
+	return nil
+}
+
+// initTracing installs the global tracer provider from the (optional)
+// observability config and returns a span-flushing shutdown function.
+func initTracing(conf *configs.ServerConfig) (otel.ShutdownFunc, error) {
+	var tracingCfg *configs.TracingConfig
+	if conf.Observability != nil {
+		tracingCfg = conf.Observability.Tracing
+	}
+
+	return otel.Init(context.Background(), tracingCfg)
+}
+
+// shutdownOptions assembles the graceful-shutdown steps in order: drain the
+// public and admin HTTP servers, close the handler, then flush buffered spans.
+func shutdownOptions(srv *http.Server, obsSrv *observability.Server,
+	handler *turl.Handler, shutdownTracing otel.ShutdownFunc) []shutdown.OptionFunc {
 	opts := []shutdown.OptionFunc{shutdown.HTTPServerShutdown(srv)}
 	if obsSrv != nil {
 		opts = append(opts, shutdown.HTTPServerShutdown(obsSrv.HTTPServer()))
 	}
 
-	opts = append(opts, shutdown.HandlerShutdown(handler))
-
-	shutdown.GracefulShutdown(quitCtx, opts...)
-
-	slog.Info("HTTP Server exited")
-
-	return nil
+	return append(opts,
+		shutdown.HandlerShutdown(handler),
+		shutdown.OptionFunc(shutdownTracing),
+	)
 }
 
 // startObservabilityServer starts the admin server when enabled, wiring the
