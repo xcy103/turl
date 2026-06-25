@@ -58,6 +58,23 @@ service nodes — one for read/write and one for read-only.
   read-only nodes to spread read traffic.
 - Swagger: [http://localhost:8080/v1/management/swagger/index.html#/](http://localhost:8080/v1/management/swagger/index.html#/)
 
+### Observability
+
+Each node runs an admin server on a separate port (`:9090`), kept off the public
+API so internal endpoints are never exposed to end users:
+
+- `GET /healthz` — liveness (process is up);
+- `GET /readyz` — readiness (pings MySQL and Redis), `503` if a dependency is down;
+- `GET /metrics` — Prometheus metrics (RED HTTP metrics, cache hit/miss ratio, …);
+- `GET /debug/pprof/` — profiling.
+
+`make deploy` also starts a metrics stack:
+
+- Prometheus: [http://localhost:9092](http://localhost:9092) — scrapes both nodes;
+- Grafana: [http://localhost:3000](http://localhost:3000) — anonymous access, with a
+  pre-provisioned "turl service overview" dashboard (request rate, p95 latency,
+  cache hit ratio, short links created).
+
 ## API
 
 ### Create a short link

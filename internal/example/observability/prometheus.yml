@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Scrape the turl read/write and read-only nodes on their admin ports.
+  - job_name: turl
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["turl:9090"]
+        labels:
+          role: read-write
+      - targets: ["turl-ro:9090"]
+        labels:
+          role: read-only
