@@ -3,6 +3,7 @@ package turl
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -216,7 +217,7 @@ func (c *commandService) Create(ctx context.Context, long []byte, ttl time.Durat
 	short := mapping.Base58Encode(seq)
 	// set local cache and distributed cache, if failed, just log the error, not return err.
 	// record.ExpiresAt covers both the new and the idempotent-duplicate paths.
-	if err = c.cache.Set(ctx, string(short), long, cacheTTL(c.ttl, record.ExpiresAt)); err != nil {
+	if err = c.cache.Set(ctx, string(short), encodeCacheValue(long, record.ExpiresAt), cacheTTL(c.ttl, record.ExpiresAt)); err != nil {
 		slog.ErrorContext(ctx, "failed to set cache", slog.Any("error", err))
 	}
 
@@ -305,14 +306,14 @@ func (q *queryService) Retrieve(ctx context.Context, short []byte) ([]byte, erro
 		return nil, err
 	}
 
-	// try to get from cache
-	long, err := q.cache.Get(ctx, string(short))
-	if err == nil {
-		return long, nil
+	// try the cache, validating the encoded expiry on a hit
+	long, hit, err := q.fromCache(ctx, string(short))
+	if err != nil {
+		return nil, err
 	}
 
-	if !errors.Is(err, cache.ErrCacheMiss) {
-		return nil, err
+	if hit {
+		return long, nil
 	}
 
 	// try to get from db
@@ -325,14 +326,39 @@ func (q *queryService) Retrieve(ctx context.Context, short []byte) ([]byte, erro
 		return nil, ErrExpired
 	}
 
-	long = res.LongURL
-	// Cache with a TTL bounded by the link's remaining lifetime so an expired
-	// link can never be served from a still-warm cache entry.
-	if cerr := q.cache.Set(ctx, string(short), long, cacheTTL(q.ttl, res.ExpiresAt)); cerr != nil {
+	// Cache the URL with its expiry (and a lifetime-bounded TTL) so a stale entry
+	// served from a cache that ignores per-entry TTLs is still rejected on read.
+	if cerr := q.cache.Set(ctx, string(short),
+		encodeCacheValue(res.LongURL, res.ExpiresAt), cacheTTL(q.ttl, res.ExpiresAt)); cerr != nil {
 		slog.ErrorContext(ctx, "failed to set cache", slog.Any("error", cerr))
 	}
 
-	return long, nil
+	return res.LongURL, nil
+}
+
+// fromCache returns the cached URL on a live hit. hit is false for a miss or a
+// malformed entry (so the caller falls back to the database); an expired entry
+// returns ErrExpired, and a backend error is propagated.
+func (q *queryService) fromCache(ctx context.Context, key string) (long []byte, hit bool, err error) {
+	cached, err := q.cache.Get(ctx, key)
+	if err != nil {
+		if errors.Is(err, cache.ErrCacheMiss) {
+			return nil, false, nil
+		}
+
+		return nil, false, err
+	}
+
+	long, expiresAt, ok := decodeCacheValue(cached)
+	if !ok {
+		return nil, false, nil
+	}
+
+	if isExpired(expiresAt) {
+		return nil, false, ErrExpired
+	}
+
+	return long, true, nil
 }
 
 // GetByLong returns the tiny URL by the long URL.
@@ -366,6 +392,46 @@ func (q *queryService) Close() error {
 	}
 
 	return q.cache.Close()
+}
+
+// cacheValuePrefix is the size of the expiry header prepended to cached values.
+const cacheValuePrefix = 8
+
+// encodeCacheValue stores the expiry alongside the long URL: an 8-byte
+// big-endian unix-nano expiry (0 = never) followed by the URL. The read path
+// validates this on every hit, so an expired link is rejected even when the
+// cache layer outlives it — the local bigcache uses one global TTL and ignores
+// per-entry TTLs, so a bounded Set alone is not enough for correctness.
+func encodeCacheValue(long []byte, expiresAt *time.Time) []byte {
+	var exp int64
+	if expiresAt != nil {
+		exp = expiresAt.UnixNano()
+	}
+
+	buf := make([]byte, cacheValuePrefix+len(long))
+	binary.BigEndian.PutUint64(buf[:cacheValuePrefix], uint64(exp))
+	copy(buf[cacheValuePrefix:], long)
+
+	return buf
+}
+
+// decodeCacheValue splits a cached value into its URL and expiry. ok is false
+// for a malformed entry, signalling the caller to fall back to the database.
+func decodeCacheValue(b []byte) (long []byte, expiresAt *time.Time, ok bool) {
+	if len(b) < cacheValuePrefix {
+		return nil, nil, false
+	}
+
+	exp := int64(binary.BigEndian.Uint64(b[:cacheValuePrefix])) //nolint:gosec // round-trip of a signed unix-nano timestamp
+	long = b[cacheValuePrefix:]
+
+	if exp == 0 {
+		return long, nil, true
+	}
+
+	t := time.Unix(0, exp)
+
+	return long, &t, true
 }
 
 // cacheTTL bounds the cache TTL by the link's remaining lifetime, so an expired

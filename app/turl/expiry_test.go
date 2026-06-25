@@ -41,8 +41,34 @@ func TestIsExpired(t *testing.T) {
 	require.False(t, isExpired(&future))
 }
 
-// TestQueryService_Retrieve_Expired verifies an expired link returns ErrExpired
-// and is never written back to the cache (the mock fails on an unexpected Set).
+func TestEncodeDecodeCacheValue(t *testing.T) {
+	long := []byte("https://example.com")
+
+	t.Run("never expires round-trips", func(t *testing.T) {
+		gotLong, gotExp, ok := decodeCacheValue(encodeCacheValue(long, nil))
+		require.True(t, ok)
+		require.Equal(t, long, gotLong)
+		require.Nil(t, gotExp)
+	})
+
+	t.Run("expiry round-trips", func(t *testing.T) {
+		exp := time.Now().Add(time.Hour).Truncate(time.Nanosecond)
+		gotLong, gotExp, ok := decodeCacheValue(encodeCacheValue(long, &exp))
+		require.True(t, ok)
+		require.Equal(t, long, gotLong)
+		require.NotNil(t, gotExp)
+		require.True(t, exp.Equal(*gotExp))
+	})
+
+	t.Run("malformed entry is rejected", func(t *testing.T) {
+		_, _, ok := decodeCacheValue([]byte("short"))
+		require.False(t, ok)
+	})
+}
+
+// TestQueryService_Retrieve_Expired verifies an expired link found in the
+// database returns ErrExpired and is never written back to the cache (the mock
+// fails on an unexpected Set).
 func TestQueryService_Retrieve_Expired(t *testing.T) {
 	mockCache, mockStorage := mocks.NewMockCache(t), mocks.NewMockStorage(t)
 	q := &queryService{ttl: time.Second, db: mockStorage, cache: mockCache}
@@ -56,4 +82,38 @@ func TestQueryService_Retrieve_Expired(t *testing.T) {
 
 	require.ErrorIs(t, err, ErrExpired)
 	require.Nil(t, got)
+}
+
+// TestQueryService_Retrieve_ExpiredFromCache is the regression test for the bug
+// where a stale local-cache entry served an expired link: a cache hit whose
+// encoded expiry is in the past must return ErrExpired without touching the DB
+// (mockStorage has no expectation, so any DB call fails the test).
+func TestQueryService_Retrieve_ExpiredFromCache(t *testing.T) {
+	mockCache, mockStorage := mocks.NewMockCache(t), mocks.NewMockStorage(t)
+	q := &queryService{ttl: time.Second, db: mockStorage, cache: mockCache}
+
+	past := time.Now().Add(-time.Hour)
+	mockCache.EXPECT().Get(mock.Anything, mock.Anything).
+		Return(encodeCacheValue([]byte("https://expired.com"), &past), nil).Times(1)
+
+	got, err := q.Retrieve(context.Background(), []byte("zzzzzz"))
+
+	require.ErrorIs(t, err, ErrExpired)
+	require.Nil(t, got)
+}
+
+// TestQueryService_Retrieve_ValidFromCache verifies a live cache hit is served
+// directly, decoding the URL out of the encoded value.
+func TestQueryService_Retrieve_ValidFromCache(t *testing.T) {
+	mockCache, mockStorage := mocks.NewMockCache(t), mocks.NewMockStorage(t)
+	q := &queryService{ttl: time.Second, db: mockStorage, cache: mockCache}
+
+	future := time.Now().Add(time.Hour)
+	mockCache.EXPECT().Get(mock.Anything, mock.Anything).
+		Return(encodeCacheValue([]byte("https://alive.com"), &future), nil).Times(1)
+
+	got, err := q.Retrieve(context.Background(), []byte("zzzzzz"))
+
+	require.NoError(t, err)
+	require.Equal(t, []byte("https://alive.com"), got)
 }
