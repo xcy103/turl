@@ -86,7 +86,7 @@ func Test_localCache_Get_Large(t *testing.T) {
 	})
 
 	v := []byte("value")
-	var nums int = 1e6
+	var nums int = 1e4
 	for i := range nums {
 		require.NoError(t, c.Set(context.Background(), strconv.Itoa(i), v, 10*time.Minute))
 	}

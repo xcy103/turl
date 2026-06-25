@@ -58,7 +58,7 @@ gen/swagger:
 
 test: bootstrap
 	docker compose -f ./internal/tests/docker-compose.yaml up -d --wait
-	go test -gcflags="all=-l" -race -coverprofile=coverage.out -v ./...
+	go test -gcflags="all=-l" -race -timeout 180s -coverprofile=coverage.out -v ./...
 	docker compose -f ./internal/tests/docker-compose.yaml down
 
 

@@ -32,9 +32,11 @@ var GlobalConfig = &configs.ServerConfig{
 			TTL:         10 * time.Minute,
 		},
 		LocalCache: &configs.LocalCacheConfig{
-			TTL:       10 * time.Minute,
-			Capacity:  1e8,
-			MaxMemory: 512,
+			TTL: 10 * time.Minute,
+			// Keep the test cache small: production-sized values (1e8 entries /
+			// 512MB) preallocate enough memory to OOM the CI runner under -race.
+			Capacity:  1024,
+			MaxMemory: 16,
 		},
 	},
 }
