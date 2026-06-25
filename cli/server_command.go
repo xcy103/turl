@@ -16,6 +16,7 @@ import (
 	"github.com/beihai0xff/turl/app/turl"
 	"github.com/beihai0xff/turl/configs"
 	"github.com/beihai0xff/turl/pkg/log"
+	"github.com/beihai0xff/turl/pkg/metrics"
 	"github.com/beihai0xff/turl/pkg/observability"
 	"github.com/beihai0xff/turl/pkg/shutdown"
 )
@@ -128,6 +129,7 @@ func startObservabilityServer(c *configs.ObservabilityConfig, handler *turl.Hand
 
 	obsSrv := observability.New(c)
 	obsSrv.RegisterReadinessCheck("storage", handler.CheckReadiness)
+	obsSrv.SetMetricsHandler(metrics.Handler())
 
 	go func() {
 		if err := obsSrv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {

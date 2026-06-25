@@ -15,6 +15,7 @@ import (
 	"github.com/beihai0xff/turl/pkg/cache"
 	"github.com/beihai0xff/turl/pkg/db/mysql"
 	"github.com/beihai0xff/turl/pkg/mapping"
+	"github.com/beihai0xff/turl/pkg/metrics"
 	"github.com/beihai0xff/turl/pkg/storage"
 	"github.com/beihai0xff/turl/pkg/tddl"
 	"github.com/beihai0xff/turl/pkg/validate"
@@ -180,6 +181,9 @@ func (c *commandService) Create(ctx context.Context, long []byte) (*model.TinyUR
 		} else {
 			return nil, fmt.Errorf("failed to insert into db: %w", err)
 		}
+	} else {
+		// Count only genuinely new links; the duplicate path above is idempotent.
+		metrics.IncShortenCreated()
 	}
 
 	short := mapping.Base58Encode(seq)

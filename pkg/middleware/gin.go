@@ -4,10 +4,12 @@ package middleware
 import (
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/beihai0xff/turl/pkg/metrics"
 	"github.com/beihai0xff/turl/pkg/workqueue"
 )
 
@@ -37,6 +39,29 @@ func Logger() gin.HandlerFunc {
 			slog.Duration("latency", end.Sub(start)),
 			slog.String("user_agent", c.Request.UserAgent()),
 			slog.String("error", c.Errors.ByType(gin.ErrorTypePrivate).String()),
+		)
+	}
+}
+
+// Metrics returns a middleware that records RED metrics (request rate, errors,
+// and duration) for every request. It labels by the matched route template
+// (e.g. "/:short") rather than the raw path to keep metric cardinality bounded.
+func Metrics() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+
+		c.Next()
+
+		path := c.FullPath()
+		if path == "" {
+			path = "unmatched"
+		}
+
+		metrics.ObserveHTTPRequest(
+			c.Request.Method,
+			path,
+			strconv.Itoa(c.Writer.Status()),
+			time.Since(start).Seconds(),
 		)
 	}
 }

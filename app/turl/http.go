@@ -41,7 +41,7 @@ func NewServer(h *Handler, c *configs.ServerConfig) (*http.Server, error) {
 		gin.SetMode(gin.DebugMode)
 	}
 
-	router.Use(middleware.Logger(), middleware.HealthCheck(HealthCheckPath))
+	router.Use(middleware.Metrics(), middleware.Logger(), middleware.HealthCheck(HealthCheckPath))
 
 	router.Use(gin.Recovery()) // recover from any panics, should be the last middleware
 	router.GET("/:short", h.Redirect).Use(middleware.RateLimiter(

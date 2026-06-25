@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/beihai0xff/turl/configs"
+	"github.com/beihai0xff/turl/pkg/metrics"
 )
 
 type proxy struct {
@@ -33,8 +34,8 @@ func newProxy(c *configs.CacheConfig) (*proxy, error) {
 	}
 
 	return &proxy{
-		distributedCache: NewRedisRemoteCache(c.Redis),
-		localCache:       lc,
+		distributedCache: newMetricsCache(metrics.CacheLayerDistributed, NewRedisRemoteCache(c.Redis)),
+		localCache:       newMetricsCache(metrics.CacheLayerLocal, lc),
 		remoteCacheTTL:   c.Redis.TTL,
 		localCacheTTL:    c.LocalCache.TTL,
 	}, nil
