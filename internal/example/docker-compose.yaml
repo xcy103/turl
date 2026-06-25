@@ -3,12 +3,7 @@ services:
     image: beihai0xff/turl:latest
     hostname: turl
     container_name: turl
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
+    restart: on-failure
     command: "-f /app/config.yaml"
     volumes:
       - ./config.yaml:/app/config.yaml
@@ -24,12 +19,7 @@ services:
     image: beihai0xff/turl:latest
     hostname: turl-ro
     container_name: turl-ro
-    deploy:
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
+    restart: on-failure
     command: "-f /app/config.yaml --readonly"
     volumes:
       - ./config.yaml:/app/config.yaml
