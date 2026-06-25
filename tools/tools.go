@@ -4,10 +4,11 @@
 // according to https://go.dev/wiki/Modules#how-can-i-track-tool-dependencies-for-a-module.
 // To install the following tools at the version used by this repo run:
 // $ make bootstrap
-// or
-// $ go generate -tags tools tools/tools.go
+//
+// Versions are pinned to match the Makefile (SWAG_VERSION / GOMODIFYTAGS_VERSION /
+// MOCKERY_VERSION), which is the single source of truth; keep these in sync.
 package tools
 
-//go:generate go install github.com/swaggo/swag/cmd/swag@latest
-//go:generate go install github.com/fatih/gomodifytags@latest
-//go:generate go install github.com/vektra/mockery/v2@latest
+//go:generate go install github.com/swaggo/swag/cmd/swag@v1.16.4
+//go:generate go install github.com/fatih/gomodifytags@v1.17.0
+//go:generate go install github.com/vektra/mockery/v2@v2.53.6

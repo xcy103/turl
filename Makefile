@@ -7,6 +7,12 @@ ARCH					:= $(shell uname -m)
 # Container image repository. Override to publish under your own namespace.
 IMAGE_REPO				?= beihai0xff/turl
 
+# Pinned code-generation tool versions (single source of truth; keep tools/tools.go
+# in sync). Pinning avoids @latest drift, e.g. a newer mockery requiring a newer Go.
+SWAG_VERSION			:= v1.16.4
+MOCKERY_VERSION			:= v2.53.6
+GOMODIFYTAGS_VERSION	:= v1.17.0
+
 # fill the ldflags with the build info
 ldflags					=  "-w -X 'github.com/beihai0xff/turl/cli.version=$(TAG_VERSION)' -X 'github.com/beihai0xff/turl/cli.gitHash=$(COMMIT_ID)' -X 'github.com/beihai0xff/turl/cli.buildTime=$(BUILD_TIME)'"
 BUILD_PLATFORMS 		=  linux/amd64,linux/arm64
@@ -18,9 +24,21 @@ ifneq ($(ARCH),x86_64)
     ARCH = aarch64
 endif
 
-bootstrap:
+# Tool installation targets. swag is the only generator the production binary
+# needs (swagger docs are compiled in); mockery/gomodifytags are dev/test only.
+install/swag:
+	go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
+
+install/mockery:
+	go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
+
+install/gomodifytags:
+	go install github.com/fatih/gomodifytags@$(GOMODIFYTAGS_VERSION)
+
+install/tools: install/swag install/mockery install/gomodifytags
+
+bootstrap: install/tools
 	go mod download -x
-	go generate -tags tools tools/tools.go
 	make gen/swagger
 	make gen/mock
 
@@ -45,14 +63,19 @@ test: bootstrap
 
 
 .PHONY: bootstrap lint gen/mock gen/struct_tag gen/swagger test
+.PHONY: install/swag install/mockery install/gomodifytags install/tools
 #
 # build section
 #
 
 build: build/docker
 
-# build binary file
-build/binary: clean bootstrap
+# build binary file. The production binary only needs the compiled-in swagger
+# docs, so it installs swag and generates them — but it does NOT regenerate the
+# test-only mocks (which would pull mockery and a newer Go toolchain).
+build/binary: clean install/swag
+	go mod download
+	make gen/swagger
 	go build -tags=jsoniter -ldflags=$(ldflags) -o ./build/dist/binary/turl cmd/turl/main.go
 
 # docker: enable containerd for pulling and storing images
